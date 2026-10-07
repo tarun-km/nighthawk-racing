@@ -24,7 +24,7 @@ const BASE = {
 
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 
-// Recolour a livery for a CPU rival: draw it through a canvas filter.
+// Recolour a livery (CPU rivals, unlockable paints): draw it through a canvas filter.
 function recolour(t, filter) {
   const img = t.image;
   const c = document.createElement('canvas');
@@ -35,7 +35,8 @@ function recolour(t, filter) {
   g.drawImage(img, 0, 0);
   const out = new THREE.CanvasTexture(c);
   out.flipY = t.flipY;
-  t.dispose();
+  out.colorSpace = THREE.SRGBColorSpace;
+  out.anisotropy = 8;
   return out;
 }
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -73,12 +74,14 @@ export class Car {
     scene.add(this.group);
 
     // Liveries: editable PNGs (see livery-templates/README.md).
-    const livery = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.06 });
+    const livery = (this.livery = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.12, clearcoat: 1, clearcoatRoughness: 0.06 }));
+    this.paint = null;
     new THREE.TextureLoader().load(`/liveries/${flavor}.png`, (t) => {
-      if (variant?.filter) t = recolour(t, variant.filter);
       t.colorSpace = THREE.SRGBColorSpace;
       t.anisotropy = 8;
-      livery.map = t;
+      this.liveryBase = t;
+      if (variant?.filter) { livery.map = recolour(t, variant.filter); t.dispose(); }
+      else this.setPaint(this.paint, true);
       livery.needsUpdate = true;
     });
     const b = (flavor === 'ultra' ? buildBuggy : buildCruiser)(VEHICLES[flavor], livery);
@@ -112,6 +115,18 @@ export class Car {
   }
 
   get spec() { return this.build.spec; }
+
+  // Player paint jobs: null = the stock livery, otherwise a canvas filter.
+  setPaint(filter, force = false) {
+    if (filter === this.paint && !force) return;
+    this.paint = filter;
+    const base = this.liveryBase;
+    if (!base) return; // applied once the livery has loaded
+    if (this.painted) { this.painted.dispose(); this.painted = null; }
+    if (filter) this.painted = recolour(base, filter);
+    this.livery.map = this.painted ?? base;
+    this.livery.needsUpdate = true;
+  }
 
   // Rebuild collider + wheel layout for the chosen car.
   #buildPhysics(spec) {

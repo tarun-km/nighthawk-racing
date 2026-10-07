@@ -22,7 +22,9 @@ import { Trailer, TRAILER_LENGTH } from './trailer.js';
 import { RaceTracker, trackPoint, trackParam, trackDistance, PERIM, LAPS } from './track.js';
 import { COLORS, FLAVORS, loadBrandTextures, createNightEnvironment } from './brand.js';
 import { settings, setSetting } from './settings.js';
+import { MOBILE } from './detail.js';
 import { PRESETS, AutoQuality, FrameStats } from './quality.js';
+import { PAINTS, profile, paintById, isUnlocked, setPaint as savePaint, addXP, levelOf, gpXP, soloXP, duelXP, CUP_POINTS, CUP_ROUNDS, newCup } from './progress.js';
 
 const RUN_TIME = 75;
 const STEP = 1 / 120; // physics substep: stable contacts, smooth handling
@@ -60,19 +62,11 @@ const fmt = (t) => {
 const ordinal = (n) => (n === 1 ? 'ST' : n === 2 ? 'ND' : n === 3 ? 'RD' : 'TH');
 
 // =====================================================================
-// 1. Mosaic loader
+// 1. Loading screen: the Classic vs Ultra clip plays while the game boots
 // =====================================================================
-const COLS = 16;
-const ROWS = 9;
-const tilesEl = $('#tiles');
-tilesEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
-tilesEl.style.gridTemplateRows = `repeat(${ROWS}, 1fr)`;
-const tiles = Array.from({ length: COLS * ROWS }, () => tilesEl.appendChild(document.createElement('i')));
-const order = tiles
-  .map((el, i) => ({ el, k: Math.hypot((i % COLS) - COLS / 2 + 0.5, (Math.floor(i / COLS) - ROWS / 2 + 0.5) * 1.6) + Math.random() * 4 }))
-  .sort((a, b) => a.k - b.k)
-  .map((t) => t.el);
-let cleared = 0;
+const introEl = $('#intro');
+const introVideo = $('#intro-video');
+const barEl = $('#intro-bar');
 let targetPct = 0;
 const pct = { v: 0 };
 const pctEl = $('#intro-pct');
@@ -84,10 +78,38 @@ function progress(p, label) {
   if (label) { stage = label; stageEl.textContent = label; }
   if (p <= targetPct) return;
   targetPct = p;
-  const target = Math.floor((p / 100) * order.length);
-  while (cleared < target) gsap.to(order[cleared++], { scale: 0, rotate: 45, opacity: 0, duration: 0.45, ease: 'power3.in' });
-  gsap.to(pct, { v: p, duration: 0.35, overwrite: true, onUpdate: () => { pctEl.textContent = Math.round(pct.v); } });
+  gsap.to(pct, { v: p, duration: 0.35, overwrite: true, onUpdate: () => { pctEl.textContent = Math.round(pct.v); barEl.style.width = `${pct.v}%`; } });
 }
+// The clip loops until the game is ready, then plays out to its end (or the
+// player skips it). If it can't play at all (autoplay blocked, data saver),
+// the poster frame stands in and the intro moves on as soon as it's ready.
+let videoPlaying = false;
+let introLeft = false;
+introVideo.loop = true;
+introVideo.addEventListener('playing', () => { videoPlaying = true; }, { once: true });
+introVideo.play?.()?.catch(() => {});
+$('#intro-sound').addEventListener('click', (e) => {
+  e.stopPropagation();
+  introVideo.muted = !introVideo.muted;
+  e.currentTarget.setAttribute('aria-pressed', String(!introVideo.muted));
+  if (introVideo.paused) introVideo.play().catch(() => {});
+});
+function leaveIntro() {
+  if (!booted || introLeft) return;
+  introLeft = true;
+  playIntro();
+}
+function introReady() {
+  introEl.classList.add('is-ready');
+  stageEl.textContent = 'Ready';
+  if (!videoPlaying || introVideo.ended || introVideo.paused) { gsap.delayedCall(1.4, leaveIntro); return; }
+  introVideo.loop = false;
+  introVideo.addEventListener('ended', leaveIntro, { once: true });
+  gsap.delayedCall(9, leaveIntro); // never hold anyone longer than one clip
+}
+introEl.addEventListener('click', leaveIntro);
+addEventListener('keydown', leaveIntro);
+addEventListener('touchend', leaveIntro);
 function bootError(err) {
   if (booted) { console.error(err); return; }
   console.error(err);
@@ -101,7 +123,6 @@ addEventListener('error', (e) => bootError(e.error ?? e.message));
 addEventListener('unhandledrejection', (e) => bootError(e.reason));
 $('#boot-retry')?.addEventListener('click', () => location.reload());
 
-gsap.fromTo('.keyart', { scale: 1.08 }, { scale: 1, duration: 6, ease: 'power2.out' });
 progress(4, 'Starting physics engine');
 if (!document.createElement('canvas').getContext('webgl2')) {
   bootError(new Error('This browser or device does not support WebGL 2, which Hawk Racing needs. Try a current Chrome, Edge, Firefox or Safari.'));
@@ -125,7 +146,7 @@ progress(62, 'Building the stadium');
 // Renderer, world, cars
 // =====================================================================
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-const DPR = Math.min(devicePixelRatio, 1.5);
+const DPR = Math.min(devicePixelRatio, MOBILE ? 1.35 : 1.5);
 renderer.setPixelRatio(DPR);
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -172,7 +193,7 @@ views[0].render();
 renderer.info.autoReset = false;
 
 // ---------- quality presets + Auto ----------
-const autoQ = new AutoQuality(settings.quality === 'auto' ? 'medium' : settings.quality);
+const autoQ = new AutoQuality(settings.quality === 'auto' ? (MOBILE ? 'low' : 'medium') : settings.quality);
 const activePreset = () => PRESETS[settings.quality === 'auto' ? autoQ.level : settings.quality] ?? PRESETS.medium;
 let qualityKey = '';
 function applyQuality(split) {
@@ -203,9 +224,11 @@ const game = {
   players: [], // humans
   racers: [], // humans + CPU rivals
   winner: null,
+  cup: null, // Hawk Cup in progress (Grand Prix series)
 };
 let flavor = FLAVORS[store.get('nh-flavor', 'classic')] ? store.get('nh-flavor', 'classic') : 'classic';
 let difficulty = DIFFICULTY[store.get('nh-diff', 'pro')] ? store.get('nh-diff', 'pro') : 'pro';
+let gpType = store.get('nh-gptype', 'single') === 'cup' ? 'cup' : 'single';
 
 function makeRacer(idx, fl, name, car, extra = {}) {
   return {
@@ -215,8 +238,9 @@ function makeRacer(idx, fl, name, car, extra = {}) {
     style: 0, driftChain: 0, driftCharge: 0, draft: 0, topKmh: 0, landT: 0, landed: false, released: false,
     place: idx + 1, finished: false, finishTime: 0, outT: 0,
     item: null, rolling: 0, rollItem: null, shield: 0, firePrev: false,
+    launchHeld: 0, launchWindow: 0, stall: 0,
     tracker: new RaceTracker(), wrongShown: false,
-    stats: { cans: 0, bolts: 0, wings: 0, nitro: 0, gates: 0, drift: 0, hits: 0, items: 0, overtakes: 0, turbos: 0 },
+    stats: { cans: 0, bolts: 0, wings: 0, nitro: 0, gates: 0, drift: 0, hits: 0, items: 0, overtakes: 0, turbos: 0, perfect: 0 },
     ...extra,
   };
 }
@@ -289,12 +313,54 @@ for (const f of Object.values(FLAVORS)) {
   fuelsEl.appendChild(b);
 }
 
+// Paint jobs: unlocked with pilot levels, remembered per car
+const paintsEl = $('#paints');
+function renderPaints() {
+  const prof = profile();
+  const current = prof.paint[flavor] ?? 'stock';
+  paintsEl.innerHTML = PAINTS.map((pt) => {
+    const open = isUnlocked(pt, prof.xp);
+    const sw = pt.swatch ?? FLAVORS[flavor].css;
+    const label = open ? pt.name : `Lvl ${pt.level}`;
+    return `<button class="paint${open ? '' : ' is-locked'}" type="button" role="radio" aria-checked="${pt.id === current}" data-paint="${pt.id}" style="--sw:${sw}" title="${open ? pt.name : `${pt.name}: reach level ${pt.level}`}"><i></i><span>${label}</span></button>`;
+  }).join('');
+}
+function applyPaints() {
+  const prof = profile();
+  for (const k of ['classic', 'ultra']) cars[k].setPaint(paintById(prof.paint[k]).filter);
+}
+paintsEl.addEventListener('click', (e) => {
+  const b = e.target.closest('.paint');
+  if (!b) return;
+  const pt = paintById(b.dataset.paint);
+  if (!isUnlocked(pt)) { toast(`${pt.name} unlocks at level ${pt.level}. Race to earn XP.`); return; }
+  savePaint(flavor, pt.id);
+  applyPaints();
+  renderPaints();
+  audio.sfx('can');
+  particles.burst(cars[flavor].position.clone().setY(1.2), 0xffffff, 30, 7);
+  gsap.fromTo(cars[flavor].group.scale, { x: 0.94, y: 1.08, z: 0.94 }, { x: 1, y: 1, z: 1, duration: 0.5, ease: 'elastic.out(1, 0.4)' });
+});
+function renderLevel() {
+  const { level, into, next } = levelOf(profile().xp);
+  $('#lvl-num').textContent = level;
+  $('#lvl-bar').style.width = `${(into / next) * 100}%`;
+  $('#lvl-xp').textContent = `${into} / ${next} XP`;
+}
+function setGpType(t) {
+  gpType = t;
+  store.set('nh-gptype', t);
+  $$('.gptype').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.type === t)));
+}
+$$('.gptype').forEach((b) => b.addEventListener('click', () => { setGpType(b.dataset.type); audio.sfx('count'); }));
+
 function setFlavor(key, animate = false) {
   flavor = key;
   store.set('nh-flavor', key);
   $$('.fuel', fuelsEl).forEach((b) => b.setAttribute('aria-checked', String(b.dataset.key === key)));
   $('#res-can').src = `/brand/can-${key}.webp`;
   applyTheme();
+  renderPaints();
   if (game.state === 'menu') layoutGarage();
   if (animate) {
     audio.sfx('can');
@@ -315,12 +381,16 @@ function setMode(mode) {
   renderCareer();
   if (game.state === 'menu') layoutGarage();
 }
-$$('.mode').forEach((b) => b.addEventListener('click', () => { setMode(b.dataset.mode); audio.sfx('count'); }));
+$$('.mode').forEach((b) => b.addEventListener('click', () => {
+  setMode(b.dataset.mode);
+  audio.sfx('count');
+  if (isTouch && b.dataset.mode === 'duel') toast('Duel is split screen for two players: plug in a keyboard or two gamepads.');
+}));
 
 // Grand Prix difficulty + career (stored on this device)
 function career() {
   const c = store.get(CAREER_KEY, null) ?? {};
-  return { races: c.races ?? 0, podiums: c.podiums ?? 0, wins: { rookie: 0, pro: 0, legend: 0, ...(c.wins ?? {}) }, bestLap: c.bestLap ?? null };
+  return { races: c.races ?? 0, podiums: c.podiums ?? 0, cups: c.cups ?? 0, wins: { rookie: 0, pro: 0, legend: 0, ...(c.wins ?? {}) }, bestLap: c.bestLap ?? null };
 }
 const unlocked = (k) => k !== 'legend' || career().wins.pro > 0 || career().wins.legend > 0;
 function setDifficulty(k) {
@@ -340,7 +410,7 @@ function renderCareer() {
   const c = career();
   $('#car-wins').textContent = c.wins.rookie + c.wins.pro + c.wins.legend;
   $('#car-podiums').textContent = c.podiums;
-  $('#car-races').textContent = c.races;
+  $('#car-cups').textContent = c.cups;
   $('#car-best').textContent = fmt(c.bestLap);
   renderDiff();
 }
@@ -357,8 +427,33 @@ function renderTally() {
   $('#tally-red').textContent = t.red;
 }
 
-if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('is-touch');
-input.bindTouch($('#stick'), $('#stick-knob'), $('#btn-boost'), $('#btn-drift'), $('#btn-item'));
+const isTouch = matchMedia('(pointer: coarse)').matches;
+document.body.classList.toggle('is-touch', isTouch);
+input.touch = isTouch;
+input.autoGas = settings.autoGas;
+input.bindTouch($('#stick'), $('#stick-knob'), $('#btn-boost'), $('#btn-drift'), $('#btn-item'), $('#btn-brake'));
+const btnBoost = $('#btn-boost');
+const btnItem = $('#btn-item');
+const btnItemUse = $('#btn-item use');
+// short vibrations on Android phones (no-op elsewhere)
+const buzz = (ms) => { if (isTouch && settings.haptics) navigator.vibrate?.(ms); };
+
+// Full screen + landscape lock where the browser allows it (Android Chrome);
+// iOS has no element full screen, so the button stays hidden there.
+document.body.classList.toggle('can-fullscreen', !!document.fullscreenEnabled);
+async function enterFullscreen() {
+  if (!document.fullscreenEnabled || document.fullscreenElement) return;
+  try {
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    await screen.orientation?.lock?.('landscape');
+  } catch {}
+}
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  else enterFullscreen();
+}
+// a phone turned to portrait mid-race pauses (the rotate prompt shows)
+matchMedia('(orientation: portrait)').addEventListener?.('change', (e) => { if (e.matches && isTouch) pause(); });
 
 // =====================================================================
 // Screens, leaderboard
@@ -420,6 +515,10 @@ function paneMsg(p, text, color) {
 function updatePane(p, dt) {
   const ui = p.pane;
   const kmh = p.car.kmh;
+  if (isTouch && p.idx === 0) {
+    const n = Math.round(p.nitro);
+    if (n !== ui.lastNitro) { ui.lastNitro = n; btnBoost.style.setProperty('--n', n); btnBoost.classList.toggle('is-empty', n < 3 && !p.boosting); }
+  }
   ui.kmh.textContent = Math.round(kmh);
   const sp = Math.min(1, kmh / 200);
   ui.speedArc.style.strokeDasharray = `${ARC * sp} ${ARC + 10}`;
@@ -472,6 +571,14 @@ function updatePane(p, dt) {
   ui.item.classList.toggle('is-empty', !it);
   ui.item.classList.toggle('is-rolling', p.rolling > 0);
   ui.item.classList.toggle('is-ready', !!p.item && !(p.rolling > 0));
+  if (isTouch && p.idx === 0) {
+    const href = `#ic-${it ?? 'none'}`;
+    if (btnItemUse.getAttribute('href') !== href) {
+      btnItemUse.setAttribute('href', href);
+      btnItem.style.setProperty('--ic', it ? POWER_INFO[it].color : 'rgba(244,246,255,.35)');
+    }
+    btnItem.classList.toggle('is-ready', !!p.item && !(p.rolling > 0));
+  }
 }
 
 const _f2 = new THREE.Vector2();
@@ -649,7 +756,7 @@ function handleItemEvent(e) {
       r.padBoost = Math.max(r.padBoost, 2.4);
       r.car.body.applyImpulse({ x: r.car.forward.x * 1100, y: 0, z: r.car.forward.z * 1100 }, true);
       particles.burst(r.car.position.clone().setY(0.6), COLORS.lime, 20, 7);
-      if (me) { audio.sfx('turbo'); paneMsg(r, 'TURBO!', '#8dc63f'); r.shake = Math.max(r.shake, 0.25); }
+      if (me) { audio.sfx('turbo'); paneMsg(r, 'TURBO!', '#8dc63f'); r.shake = Math.max(r.shake, 0.25); buzz(25); }
       break;
     }
     case 'hawk':
@@ -661,8 +768,8 @@ function handleItemEvent(e) {
     case 'hit':
       if (e.by) e.by.stats.hits++;
       if (me || e.by?.human) audio.sfx('hit');
-      if (me) { paneMsg(r, 'SPUN OUT!', '#ff3348'); r.shake = 0.7; }
-      if (e.by?.human && e.by !== r) { paneMsg(e.by, 'DIRECT HIT!', '#8dc63f'); popup(e.by, 'HIT!', e.pos, 'lime'); world.cheer(0.7); }
+      if (me) { paneMsg(r, 'SPUN OUT!', '#ff3348'); r.shake = 0.7; buzz(90); }
+      if (e.by?.human && e.by !== r) { paneMsg(e.by, 'DIRECT HIT!', '#8dc63f'); popup(e.by, 'HIT!', e.pos, 'lime'); world.cheer(0.7); buzz(30); }
       break;
     case 'block':
       if (me) { paneMsg(r, 'BLOCKED!', '#3d6bff'); audio.sfx('shield'); }
@@ -712,12 +819,24 @@ function addRivals(all) {
 function startRun({ trailer: isTrailer = false } = {}) {
   if (['intro', 'sound', 'drop', 'landing', 'countdown', 'trailer'].includes(game.state)) return;
   audio.unlock();
+  if (isTouch && !isTrailer) enterFullscreen();
   countdownTl?.kill();
   popupsEl.innerHTML = '';
   const mode = game.mode;
   const duel = mode === 'duel', gp = mode === 'gp';
   input.mode = duel ? 'duel' : 'solo';
+  // Hawk Cup: a fresh series, or the next round of the current one
+  if (gp && !isTrailer && gpType === 'cup') {
+    if (!game.cup || game.cup.done) game.cup = newCup();
+    else if (game.cup.roundDone) { game.cup.round++; game.cup.roundDone = false; }
+  } else game.cup = null;
   applyTheme();
+  if (game.cup) world.setFlavor(CUP_ROUNDS[game.cup.round - 1].theme);
+  // paint jobs ride on your car; rival stock cars race in stock colours
+  applyPaints();
+  if (gp) cars[flavor === 'classic' ? 'ultra' : 'classic'].setPaint(null);
+  if (isTrailer) { cars.classic.setPaint(null); cars.ultra.setPaint(null); }
+  $('.hud-clock .race-only').textContent = game.cup ? `Round ${game.cup.round}/3` : 'race';
   game.players = isTrailer ? []
     : duel ? [makePlayer(0, 'classic', (p1Input.value || pilot).slice(0, 14)), makePlayer(1, 'ultra', (p2Input.value || 'RIVAL').slice(0, 14))]
     : [makePlayer(0, flavor, (nameInput.value || pilot).slice(0, 14))];
@@ -823,10 +942,67 @@ function startLights() {
     audio.sfx('go');
     game.state = 'race';
     game.clock = 0;
-    for (const r of game.racers) r.tracker.start(0);
+    for (const r of game.racers) { r.tracker.start(0); judgeLaunch(r); }
     if (game.mode === 'solo') pickups.spawnGate(game.players[0].car);
   }, null, lamps.length * 0.55 + 0.45 + Math.random() * 0.4);
   countdownTl.call(() => $('#lights').classList.remove('is-on'), null, '+=1.2');
+}
+
+// Launch: throttle down just before the lights go out = PERFECT START;
+// held too long = wheelspin; within a beat after = GOOD START.
+function judgeLaunch(r) {
+  if (!r.human) {
+    const chance = { rookie: 0.15, pro: 0.35, legend: 0.6 }[difficulty] ?? 0.35;
+    if (Math.random() < chance) launchBoost(r, true);
+    return;
+  }
+  const held = r.launchHeld;
+  if (held > 0 && held <= 0.45) launchBoost(r, true);
+  else if (held > 0.45) { r.stall = 0.6; paneMsg(r, 'WHEELSPIN!', '#ff3348'); }
+  else r.launchWindow = 0.3;
+}
+function launchBoost(r, perfect) {
+  r.padBoost = Math.max(r.padBoost, perfect ? 1.5 : 0.7);
+  const k = perfect ? 700 : 350;
+  r.car.body.applyImpulse({ x: r.car.forward.x * k, y: 0, z: r.car.forward.z * k }, true);
+  if (perfect) r.stats.perfect = 1;
+  if (!r.human) return;
+  paneMsg(r, perfect ? 'PERFECT START!' : 'GOOD START', perfect ? '#8dc63f' : '#f4f6ff');
+  audio.sfx('turbo');
+  buzz(perfect ? 45 : 20);
+  r.shake = Math.max(r.shake, perfect ? 0.35 : 0.2);
+}
+
+// Results: XP gained, the bar filling through any level-ups, new paints.
+function showXP(sel, xp) {
+  const box = $(`${sel} .xp-block`);
+  if (!box) return;
+  const { before, after, gained, unlocked } = xp;
+  const lvlEl = box.querySelector('.xp-lvl');
+  const bar = box.querySelector('.xp-bar i');
+  const note = box.querySelector('.xp-note');
+  box.querySelector('.xp-gain').textContent = `+${gained} XP`;
+  box.classList.remove('lvl-up');
+  lvlEl.textContent = `Level ${before.level}`;
+  gsap.killTweensOf(bar);
+  bar.style.width = `${(before.into / before.next) * 100}%`;
+  note.hidden = true;
+  const tl = gsap.timeline({ delay: 0.7 });
+  for (let l = before.level; l <= after.level; l++) {
+    tl.to(bar, { width: `${l === after.level ? (after.into / after.next) * 100 : 100}%`, duration: 0.6, ease: 'power2.out' });
+    if (l < after.level) {
+      tl.call(() => { lvlEl.textContent = `Level ${l + 1}`; box.classList.add('lvl-up'); audio.sfx('wings'); });
+      tl.set(bar, { width: '0%' });
+    }
+  }
+  if (after.level > before.level) {
+    tl.call(() => {
+      note.hidden = false;
+      note.textContent = unlocked.length ? `Level ${after.level}! New paint unlocked: ${unlocked.map((u) => u.name).join(', ')}` : `Level ${after.level}!`;
+    });
+  }
+  renderLevel();
+  renderPaints();
 }
 
 function endSolo() {
@@ -845,6 +1021,7 @@ function endSolo() {
   ].map(([k, v]) => `<div class="stat"><b>${v}</b><small>${k}</small></div>`).join('');
   renderBoard($('#board-results'), id);
   renderBoard($('#board-menu'), id);
+  const xp = addXP(soloXP({ score: p.score, gates: p.stats.gates }));
   const resScore = $('#res-score');
   const counter = { v: 0 };
   setTimeout(() => {
@@ -852,6 +1029,7 @@ function endSolo() {
     gsap.from('#results .panel', { y: 40, opacity: 0, duration: 0.5, ease: 'power3.out' });
     gsap.from('#res-stats .stat', { y: 16, opacity: 0, stagger: 0.04, duration: 0.4, delay: 0.2 });
     gsap.to(counter, { v: p.score, duration: 1.2, ease: 'power2.out', onUpdate: () => (resScore.textContent = Math.round(counter.v).toLocaleString()) });
+    showXP('#results', xp);
   }, 1200);
 }
 
@@ -915,6 +1093,7 @@ function endDuel() {
   renderTally();
   show('hud', 'duel-results');
   gsap.from('#duel-results .panel', { y: 40, opacity: 0, duration: 0.5, ease: 'power3.out' });
+  showXP('#duel-results', addXP(duelXP({ won: w === game.players[0] })));
 }
 
 function endGP() {
@@ -950,10 +1129,39 @@ function endGP() {
     ['Race time', fmt(me.finishTime)], ['Best lap', fmt(me.tracker.best)], ['Top km/h', Math.round(me.topKmh)],
     ['Overtakes', me.stats.overtakes], ['Power-ups', me.stats.items], ['Hits landed', me.stats.hits],
   ].map(([k, v]) => `<div class="stat"><b>${v}</b><small>${k}</small></div>`).join('');
+  // Hawk Cup: points for every finish, standings after each round
+  const cup = game.cup;
+  let cupBonus = 0;
+  $('#gp-cup').hidden = !cup;
+  if (cup) {
+    cup.names ??= {};
+    cup.colors ??= {};
+    order.forEach((r, i) => {
+      const key = r.human ? 'me' : r.name;
+      cup.points[key] = (cup.points[key] ?? 0) + (CUP_POINTS[i] ?? 0);
+      cup.names[key] = r.name;
+      cup.colors[key] = r.css;
+    });
+    cup.roundDone = true;
+    cup.done = cup.round >= 3;
+    const table = Object.keys(cup.points).sort((a, b) => cup.points[b] - cup.points[a]);
+    const myRank = table.indexOf('me') + 1;
+    if (cup.done) {
+      cupBonus = myRank === 1 ? 400 : myRank <= 3 ? 150 : 50;
+      if (myRank === 1) { const cc = career(); cc.cups++; store.set(CAREER_KEY, cc); }
+    }
+    $('#cup-title').textContent = cup.done
+      ? (myRank === 1 ? 'Hawk Cup champion!' : `Hawk Cup · ${myRank}${ordinal(myRank).toLowerCase()} overall`)
+      : `Hawk Cup · after round ${cup.round} of 3 · ${CUP_ROUNDS[cup.round - 1].name}`;
+    $('#cup-table').innerHTML = table.map((k, i) => `<li class="${k === 'me' ? 'me' : ''}"><b>${i + 1}</b><i style="--c:${cup.colors[k]}"></i><span>${escapeHtml(cup.names[k])}</span><strong>${cup.points[k]} pts</strong></li>`).join('');
+  }
+  $('#gp-again').textContent = cup ? (cup.done ? 'New cup' : `Round ${cup.round + 1}`) : 'Race again';
+  const xp = addXP(gpXP({ place, difficulty, overtakes: me.stats.overtakes, hits: me.stats.hits, perfect: !!me.stats.perfect }) + cupBonus);
   renderCareer();
   show('hud', 'gp-results');
   gsap.from('#gp-results .panel', { y: 40, opacity: 0, duration: 0.5, ease: 'power3.out' });
   gsap.from('#gp-table li', { x: -24, opacity: 0, stagger: 0.07, duration: 0.4, delay: 0.25 });
+  showXP('#gp-results', xp);
 }
 
 function pause() {
@@ -984,7 +1192,11 @@ function toGarage() {
   game.state = 'menu';
   game.players = [];
   game.racers = [];
+  game.cup = null;
   if (modeBeforeTrailer) { const m = modeBeforeTrailer; modeBeforeTrailer = null; setMode(m); }
+  applyTheme();
+  applyPaints();
+  renderLevel();
   input.mode = game.mode === 'duel' ? 'duel' : 'solo';
   input.clear();
   audio.music(false);
@@ -1016,6 +1228,7 @@ const actions = {
   garage: toGarage,
   skip: () => (game.state === 'trailer' ? toGarage() : airdrop.skip()),
   trailer: startTrailer,
+  fullscreen: toggleFullscreen,
   settings: openSettings,
   'close-settings': closeSettings,
   help: openHelp,
@@ -1069,9 +1282,10 @@ function splitChars(el) {
 }
 function playIntro() {
   const iris = $('#iris');
+  gsap.to(introVideo, { volume: 0, duration: 0.9, onComplete: () => introVideo.pause() });
   gsap.timeline()
-    .to('.intro-foot', { opacity: 0, duration: 0.3 }, 0.5)
-    .to('.keyart', { scale: 1.12, opacity: 0, duration: 0.6, ease: 'power3.in' }, 0.7)
+    .to('.intro-foot, .intro-brand, .intro-sound', { opacity: 0, duration: 0.3 }, 0)
+    .to('.intro-video', { scale: 1.08, opacity: 0, duration: 0.7, ease: 'power3.in' }, 0.2)
     .call(() => {
       show('welcome');
       gsap.fromTo(splitChars($('.welcome-top')), { yPercent: 110, opacity: 0 }, { yPercent: 0, opacity: 1, stagger: 0.04, duration: 0.5, ease: 'power3.out' });
@@ -1232,7 +1446,14 @@ function updateRace(dt) {
   [...game.racers].sort((a, b) => b.tracker.progress - a.tracker.progress).forEach((r, i) => {
     if (r.finished) return;
     const place = i + 1;
-    if (r.human && game.state === 'race' && place < r.place && game.clock > 3) r.stats.overtakes++;
+    if (r.human && game.state === 'race' && place < r.place && game.clock > 3) {
+      r.stats.overtakes++;
+      addNitro(r, 12);
+      if (elapsed - (r.overtakeMsgAt ?? -9) > 2) {
+        r.overtakeMsgAt = elapsed;
+        popup(r, 'OVERTAKE +NITRO', r.car.position.clone().setY(2.6), 'lime');
+      }
+    }
     r.place = place;
   });
 }
@@ -1394,6 +1615,8 @@ const bindToggle = (id, key, after) => {
 bindToggle('#set-shake', 'shake');
 bindToggle('#set-motion', 'reducedMotion', (v) => document.body.classList.toggle('reduced-motion', v));
 bindToggle('#set-stats', 'stats', (v) => diagEl.classList.toggle('is-on', v));
+bindToggle('#set-autogas', 'autoGas', (v) => { input.autoGas = v; });
+bindToggle('#set-haptics', 'haptics');
 document.body.classList.toggle('reduced-motion', settings.reducedMotion);
 for (const [id, key] of [['#set-music', 'music'], ['#set-sfx', 'sfx']]) {
   const el = $(id);
@@ -1485,6 +1708,15 @@ function frame(fixedDt) {
         if (r.driver.fire && isRacing(r)) useItem(r);
       }
     }
+    // launch timing: how long the throttle has been down during the countdown
+    for (const p of players) {
+      if (game.state === 'countdown') p.launchHeld = p.ctrl.throttle > 0.5 ? p.launchHeld + dt : 0;
+      else if (game.state === 'race' && p.launchWindow > 0) {
+        p.launchWindow -= dt;
+        if (p.ctrl.throttle > 0.5) { p.launchWindow = 0; launchBoost(p, false); }
+      }
+    }
+    for (const r of racers) if (r.stall > 0) r.stall -= dt;
     // humans fire power-ups on a fresh press
     for (const p of players) {
       const f = !!p.ctrl.fire;
@@ -1509,7 +1741,7 @@ function frame(fixedDt) {
         const r = racers.find((rr) => rr.car === c);
         const auto = r && (!r.human || r.finished);
         const ctrl = r ? (auto ? r.driver ?? input.players[0] : r.ctrl) : input.players[0];
-        const frozen = !r || !(r.human && !r.finished ? game.state === 'race' : live);
+        const frozen = !r || r.stall > 0 || !(r.human && !r.finished ? game.state === 'race' : live);
         c.prePhysics(ctrl, STEP, { boost: r?.boosting ?? false, hawk: (r?.hawk ?? 0) > 0 && live, frozen });
       }
       physics.step();
@@ -1557,6 +1789,7 @@ function frame(fixedDt) {
           if (p.human) {
             popup(p, 'NITRO PAD!', p.car.position.clone().setY(2.5), 'lime');
             audio.sfx('bolt');
+            buzz(15);
             p.shake = Math.max(p.shake, 0.2);
           }
         }
@@ -1603,7 +1836,7 @@ function frame(fixedDt) {
   applyQuality(split);
   const w = innerWidth, h = innerHeight;
   views[0].setRect(0, 0, split ? Math.floor(w / 2) - 2 : w, h);
-  views[1].setRect(Math.ceil(w / 2) + 2, 0, Math.floor(w / 2) - 2, h);
+  if (split) views[1].setRect(Math.ceil(w / 2) + 2, 0, Math.floor(w / 2) - 2, h);
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, w, h);
   renderer.setClearColor(0x02030f, 1);
@@ -1649,6 +1882,8 @@ function frame(fixedDt) {
     }
   }
   if (game.state === 'drop') $('#drop').classList.toggle('can-skip', airdrop.t > 0.8);
+  const inRace = ['drop', 'landing', 'countdown', 'race', 'finish', 'paused'].includes(game.state);
+  if (inRace !== document.body.classList.contains('in-race')) document.body.classList.toggle('in-race', inRace);
   schedule();
 }
 
@@ -1730,6 +1965,12 @@ if (import.meta.env.DEV) {
   window.__nh = {
     THREE, Driver, trackPoint, trackParam, trackDistance, CAM, game, cars, rivalCars, views, pickups, items, world, airdrop, input, trailer,
     setFlavor, setMode, setDifficulty, startRun, startTrailer, toGarage, step, rec,
+    // finish the current race in running order (checks results screens quickly)
+    finish: () => [...game.racers].sort((a, b) => b.tracker.progress - a.tracker.progress).forEach((r, i) => {
+      if (r.finished) return;
+      Object.assign(r.tracker, { finished: true, finishTime: game.clock + i * 1.5 });
+      finishRacer(r);
+    }),
     hold: (v) => { devHold = v; },
     cam: (pos, look, fov) => { debugCam = pos ? { pos: V3(...pos), look: V3(...look), fov } : null; },
   };
@@ -1745,7 +1986,11 @@ pickups.scatter(V3(0, 0, 0));
 renderBoard($('#board-menu'));
 renderTally();
 renderCareer();
+renderLevel();
+renderPaints();
+applyPaints();
+setGpType(gpType);
 schedule();
 progress(100, 'Ready');
 booted = true;
-gsap.delayedCall(0.9, playIntro);
+introReady();

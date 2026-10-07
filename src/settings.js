@@ -7,6 +7,8 @@ export const DEFAULTS = {
   music: 0.7,
   sfx: 0.8,
   stats: false,
+  autoGas: true, // touch: accelerate automatically, BRAKE to slow down
+  haptics: true,
 };
 
 function load() {

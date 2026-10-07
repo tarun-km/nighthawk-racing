@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COLORS, CAN, tex, canGeometry, canMaterials, wingShape, radialTexture, canvasTexture } from './brand.js';
 import { trackPoint, trackParam, trackDistance, TRACK_W } from './track.js';
+import { seg } from './detail.js';
 
 export const POWERS = ['turbo', 'hawk', 'mines', 'shield'];
 export const POWER_INFO = {
@@ -91,7 +92,7 @@ export class Items {
     const boxMat = new THREE.MeshStandardMaterial({ map: face, emissive: 0xffffff, emissiveMap: face, emissiveIntensity: 0.55, roughness: 0.3, metalness: 0.2 });
     const haloMat = new THREE.MeshBasicMaterial({ map: radialTexture('rgba(255,255,255,0.9)', 'rgba(255,255,255,0)'), color: COLORS.lime, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
     const n = ROWS.length * LANES.length;
-    this.boxMesh = new THREE.InstancedMesh(new RoundedBoxGeometry(1.35, 1.35, 1.35, 3, 0.2), boxMat, n);
+    this.boxMesh = new THREE.InstancedMesh(new RoundedBoxGeometry(1.35, 1.35, 1.35, seg(3, 2), 0.2), boxMat, n);
     this.haloMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(3.4, 3.4), haloMat, n);
     for (const m of [this.boxMesh, this.haloMesh]) { m.frustumCulled = false; m.visible = false; scene.add(m); }
     this.boxMesh.castShadow = true;

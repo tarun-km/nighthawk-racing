@@ -2,6 +2,7 @@
 // lamps, nitro bottles, tubes. Wheels spin about local Z; steering wheels are
 // built in the XY plane facing +Z (the driver).
 import * as THREE from 'three';
+import { seg, DETAIL } from '../detail.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COLORS, wingShape } from '../brand.js';
 
@@ -49,7 +50,7 @@ function latheZ(pts, segs = 96) {
 }
 
 // Rounded tyre cross-section (superellipse) revolved around the axle.
-function tyreGeo(R, rIn, halfW, squareness = 0.3, segs = 64) {
+function tyreGeo(R, rIn, halfW, squareness = 0.3, segs = seg(72, 48)) {
   const pts = [];
   const n = 28;
   for (let i = 0; i <= n; i++) {
@@ -112,9 +113,9 @@ export function buggyWheel(R) {
   const m = materials();
   const g = new THREE.Group();
   const halfW = 0.22;
-  g.add(new THREE.Mesh(tyreGeo(R * 0.93, R * 0.58, halfW, 0.35, 64), m.rubber));
+  g.add(new THREE.Mesh(tyreGeo(R * 0.93, R * 0.58, halfW, 0.35), m.rubber));
   // staggered chevron lugs across the tread + shoulder lugs on the sidewall
-  const lugGeo = new RoundedBoxGeometry(0.13, 0.07, 0.17, 1, 0.02);
+  const lugGeo = new RoundedBoxGeometry(0.13, 0.07, 0.17, DETAIL === 'high' ? 3 : 1, 0.02);
   const N = 22;
   const lugs = new THREE.InstancedMesh(lugGeo, m.rubber, N * 4);
   const q = new THREE.Quaternion(), e = new THREE.Euler(), mat4 = new THREE.Matrix4();

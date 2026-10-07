@@ -17,6 +17,10 @@ export class Input {
     this.touchBoost = false;
     this.touchDrift = false;
     this.touchFire = false;
+    this.touchBrake = false;
+    // touch play: the car accelerates by itself, BRAKE slows / reverses
+    this.touch = false;
+    this.autoGas = true;
     this.listeners = {};
     this.mode = 'solo';
 
@@ -57,7 +61,7 @@ export class Input {
   clear() {
     this.keys.clear();
     this.stick.x = this.stick.y = 0;
-    this.touchBoost = this.touchDrift = this.touchFire = false;
+    this.touchBoost = this.touchDrift = this.touchFire = this.touchBrake = false;
   }
 
   on(code, fn) {
@@ -84,7 +88,8 @@ export class Input {
         let t = (key('up') ? 1 : 0) - (key('down') ? 1 : 0);
         const p = self.#pad(i);
         if (p) t += (p.buttons[7]?.value ?? 0) - (p.buttons[6]?.value ?? 0);
-        if (i === 0) t -= self.stick.y;
+        if (i === 0 && self.touch) t += self.touchBrake ? -1 : self.autoGas ? 1 : -self.stick.y;
+        else if (i === 0) t -= self.stick.y;
         return Math.max(-1, Math.min(1, t));
       },
       get steer() {
@@ -118,13 +123,13 @@ export class Input {
   get boost() { return this.players[0].boost; }
   get handbrake() { return this.players[0].handbrake; }
 
-  bindTouch(stickEl, knobEl, boostEl, driftEl, fireEl) {
+  bindTouch(stickEl, knobEl, boostEl, driftEl, fireEl, brakeEl) {
     let id = null;
-    const R = 50;
     const move = (e) => {
       const t = [...e.changedTouches].find((t) => t.identifier === id);
       if (!t) return;
       const r = stickEl.getBoundingClientRect();
+      const R = r.width * 0.32; // knob travel scales with the stick's size
       let x = t.clientX - (r.left + r.width / 2);
       let y = t.clientY - (r.top + r.height / 2);
       const len = Math.hypot(x, y);
@@ -154,5 +159,6 @@ export class Input {
     hold(boostEl, 'touchBoost');
     hold(driftEl, 'touchDrift');
     if (fireEl) hold(fireEl, 'touchFire');
+    if (brakeEl) hold(brakeEl, 'touchBrake');
   }
 }

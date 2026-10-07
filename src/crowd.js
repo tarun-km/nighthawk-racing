@@ -4,6 +4,7 @@
 // (hops, waving arms, signs) runs in the vertex shader and gets louder for
 // fans close to a passing car.
 import * as THREE from 'three';
+import { seg } from './detail.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { COLORS, CAN, FLAVORS, tex, faceFrontYaw, canvasTexture } from './brand.js';
@@ -25,12 +26,12 @@ const merge = (parts) => mergeGeometries(parts.map(([g, c]) => tint(g, c)));
 
 // ---------- fan parts (can units, facing +X) ----------
 function bodyGeometry() {
-  const body = new THREE.CylinderGeometry(CAN.r, CAN.r, CAN.bodyTop - CAN.bodyBottom, 18, 1, true);
+  const body = new THREE.CylinderGeometry(CAN.r, CAN.r, CAN.bodyTop - CAN.bodyBottom, seg(20, 12), 1, true);
   body.translate(0, (CAN.bodyTop + CAN.bodyBottom) / 2, 0);
   body.rotateY(faceFrontYaw(Math.PI / 2));
   const metal = mergeGeometries([
-    lathe([[0, 0.1], [0.38, 0.0], [0.47, 0.04], [CAN.r, CAN.bodyBottom]], 18),
-    lathe([[CAN.r, CAN.bodyTop], [0.47, 2.42], [0.45, 2.53], [0.42, 2.52], [0, 2.53]], 18),
+    lathe([[0, 0.1], [0.38, 0.0], [0.47, 0.04], [CAN.r, CAN.bodyBottom]], seg(20, 12)),
+    lathe([[CAN.r, CAN.bodyTop], [0.47, 2.42], [0.45, 2.53], [0.42, 2.52], [0, 2.53]], seg(20, 12)),
   ].map((g) => { g.deleteAttribute('uv'); return g; }));
   body.deleteAttribute('uv1');
   const label = body;
@@ -39,14 +40,14 @@ function bodyGeometry() {
 }
 
 function fedoraGeometry() {
-  const brim = lathe([[0.48, 0.08], [0.95, 0.1], [1.0, 0.16], [0.9, 0.13], [0.5, 0.13]], 18);
+  const brim = lathe([[0.48, 0.08], [0.95, 0.1], [1.0, 0.16], [0.9, 0.13], [0.5, 0.13]], seg(20, 12));
   const bp = brim.attributes.position;
   for (let i = 0; i < bp.count; i++) {
     const z = bp.getZ(i);
     bp.setY(i, bp.getY(i) + Math.max(0, Math.hypot(bp.getX(i), z) - 0.55) ** 2 * (z * z) * 0.8);
   }
-  const crown = lathe([[0.52, 0.1], [0.53, 0.45], [0.47, 0.72], [0.3, 0.86], [0.1, 0.8], [0, 0.78]], 18);
-  const band = new THREE.CylinderGeometry(0.54, 0.54, 0.14, 18, 1, true);
+  const crown = lathe([[0.52, 0.1], [0.53, 0.45], [0.47, 0.72], [0.3, 0.86], [0.1, 0.8], [0, 0.78]], seg(20, 12));
+  const band = new THREE.CylinderGeometry(0.54, 0.54, 0.14, seg(20, 12), 1, true);
   band.translate(0, 0.22, 0);
   const g = merge([[brim, 0x2a2b31], [crown, 0x2a2b31], [band, 0x0b0b0f]]);
   g.rotateZ(-0.12);
@@ -60,8 +61,8 @@ function beanieGeometry() {
     const a = (i / 8) * (Math.PI / 2);
     pts.push([0.58 * Math.cos(a) + 0.001, 0.4 + 0.68 * Math.sin(a)]);
   }
-  const dome = lathe(pts, 18);
-  const cuff = lathe([[0.6, 0], [0.63, 0.06], [0.63, 0.36], [0.6, 0.42]], 18);
+  const dome = lathe(pts, seg(20, 12));
+  const cuff = lathe([[0.6, 0], [0.63, 0.06], [0.63, 0.36], [0.6, 0.42]], seg(20, 12));
   const g = merge([[dome, 0xc41f2a], [cuff, 0xb01a25]]);
   g.translate(0, CAN.h - 0.5, 0);
   return g;
@@ -102,7 +103,7 @@ function starGlassesGeometry() {
 
 // Arm pointing up from the shoulder (origin) with a racing glove at the end.
 function armGeometry(color) {
-  const arm = new THREE.CapsuleGeometry(0.11, 0.62, 4, 10);
+  const arm = new THREE.CapsuleGeometry(0.11, 0.62, 4, seg(10, 8));
   arm.translate(0, 0.42, 0);
   const glove = new RoundedBoxGeometry(0.34, 0.3, 0.3, 2, 0.1);
   glove.translate(0, 0.86, 0);

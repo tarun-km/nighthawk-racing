@@ -1,6 +1,7 @@
 // Brand kit: palette, real label textures, high-poly can geometry and the
 // procedural shapes / canvas textures used across the game.
 import * as THREE from 'three';
+import { seg } from './detail.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const COLORS = {
@@ -105,7 +106,7 @@ function lathe(points, segs) {
 
 // Level of detail: 'high' for close-ups (mascots, garage), 'medium' for the
 // giant landmark cans, 'low' for the dozens of pickups and can-stack pins.
-const CAN_LOD = { high: 160, medium: 72, low: 28 };
+const CAN_LOD = { high: 160, medium: seg(80, 56), low: seg(32, 22) };
 const canCache = {};
 
 // Returns a merged geometry with two groups: 0 = printed label, 1 = aluminium.

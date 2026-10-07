@@ -8,6 +8,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { COLORS, CAN, tex, canGeometry, canMaterials, faceFrontYaw, radialTexture, wingShape, canvasTexture } from './brand.js';
 import { createCrowd } from './crowd.js';
+import { seg, DETAIL } from './detail.js';
 
 export const ARENA = 220; // half-size in metres
 import { TRACK, TRACK_W, trackDistance, trackPoint, PERIM } from './track.js';
@@ -226,7 +227,7 @@ export function createWorld(scene, physics, R) {
     const n = 9 + v * 3;
     for (let i = 0; i < n; i++) {
       const r = 5 + rand() * 6;
-      const g = new THREE.SphereGeometry(r, 18, 12);
+      const g = new THREE.SphereGeometry(r, seg(20, 12), seg(13, 8));
       const a = rand() * Math.PI * 2, d = rand() * (16 + v * 6);
       g.translate(Math.cos(a) * d * 1.6, rand() * 6 + (r > 8 ? 3 : 0), Math.sin(a) * d * 0.8);
       puffs.push(g);
@@ -538,8 +539,8 @@ export function createWorld(scene, physics, R) {
     m.position.set(x, 0.03, z);
     scene.add(m);
   };
-  const standingCan = (flavor, s, yaw) => {
-    const m = new THREE.Mesh(canGeo, canMats[flavor]);
+  const standingCan = (flavor, s, yaw, geo = canGeo) => {
+    const m = new THREE.Mesh(geo, canMats[flavor]);
     m.scale.setScalar(s);
     m.rotation.y = faceFrontYaw(yaw);
     m.castShadow = m.receiveShadow = true;
@@ -572,9 +573,10 @@ export function createWorld(scene, physics, R) {
   led.position.y = 1.42;
   const turntable = new THREE.Group();
   turntable.position.y = 1.4;
-  const heroA = standingCan('classic', 6.6, 0);
+  const heroGeo = canGeometry(DETAIL === 'low' ? 'medium' : 'high');
+  const heroA = standingCan('classic', 6.6, 0, heroGeo);
   heroA.position.set(-6.2, 0, 0);
-  const heroB = standingCan('ultra', 6.6, 0);
+  const heroB = standingCan('ultra', 6.6, 0, heroGeo);
   heroB.position.set(6.2, 0, 0);
   turntable.add(heroA, heroB);
   // up-lights: soft additive cones washing the cans
@@ -702,7 +704,7 @@ export function createWorld(scene, physics, R) {
 
   // ---------- Night Hawk can airship circling the stadium ----------
   const blimp = new THREE.Group();
-  const hull = new THREE.Mesh(canGeo, canMats.classic);
+  const hull = new THREE.Mesh(heroGeo, canMats.classic);
   hull.scale.setScalar(5.2);
   hull.rotation.z = -Math.PI / 2;
   hull.position.x = (-CAN.h * 5.2) / 2;
@@ -754,7 +756,7 @@ export function createWorld(scene, physics, R) {
   // ---------- Course barriers: nobody leaves the road ----------
   // Visual: swept profiles along the oval. Physics: a chain of tall boxes
   // (taller than any jump) on both edges.
-  const SAMPLES = 360;
+  const SAMPLES = seg(380, 240);
   const sweep = (profile, laneBase, { uScale = 8, closed = true } = {}) => {
     const n = profile.length;
     const pos = [], uv = [], idx = [];
@@ -786,7 +788,12 @@ export function createWorld(scene, physics, R) {
     g.fillStyle = '#f4f6ff'; g.fillRect(w / 2, 0, w / 2, h);
   });
   kerbTex.wrapS = THREE.RepeatWrapping;
-  const innerProfile = [[0.8, 0], [0.8, 0.5], [0.72, 0.72], [0.5, 0.82], [0.2, 0.78], [0, 0.6], [0, 0]];
+  // rounded profiles: a half-pipe kerb and a padded wall with a soft roll top
+  const arc = (cx, cy, r, a0, a1, n) => Array.from({ length: n + 1 }, (_, i) => {
+    const a = a0 + ((a1 - a0) * i) / n;
+    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+  });
+  const innerProfile = [[0.8, 0], ...arc(0.4, 0.42, 0.4, 0, Math.PI, seg(12, 6)), [0, 0]];
   const inner = new THREE.Mesh(sweep(innerProfile, -1.5, { uScale: 4 }), new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.55 }));
   // outer: padded wall with Night Hawk banner boards facing the road
   const banner = canvasTexture(2048, 128, (g, w, h) => {
@@ -804,10 +811,10 @@ export function createWorld(scene, physics, R) {
     g.fillStyle = '#8dc63f'; g.fillRect(0, h - 8, w, 8);
   });
   banner.wrapS = THREE.RepeatWrapping;
-  const outerProfile = [[0, 0], [0, 1.15], [0.06, 1.32], [0.2, 1.42], [0.6, 1.42], [0.74, 1.3], [0.8, 1.1], [0.8, 0]];
+  const outerProfile = [[0, 0], [0, 1.1], ...arc(0.4, 1.1, 0.4, Math.PI, 0, seg(14, 6)).slice(1, -1), [0.8, 1.1], [0.8, 0]];
   const outer = new THREE.Mesh(sweep(outerProfile, W + 0.5, { uScale: 30 }), new THREE.MeshStandardMaterial({ color: 0x0b1452, roughness: 0.6 }));
   const boards = new THREE.Mesh(sweep([[0, 0.14], [0, 1.08]], W + 0.49, { uScale: 46 }), new THREE.MeshStandardMaterial({ map: banner, roughness: 0.5, emissive: 0xffffff, emissiveMap: banner, emissiveIntensity: 0.25, side: THREE.DoubleSide }));
-  const capStrip = new THREE.Mesh(sweep([[0.2, 1.425], [0.6, 1.425]], W + 0.5, { uScale: 30 }), new THREE.MeshStandardMaterial({ color: 0xf4f6ff, roughness: 0.4, side: THREE.DoubleSide }));
+  const capStrip = new THREE.Mesh(sweep(arc(0.4, 1.1, 0.415, Math.PI * 0.72, Math.PI * 0.28, seg(6, 3)), W + 0.5, { uScale: 30 }), new THREE.MeshStandardMaterial({ color: 0xf4f6ff, roughness: 0.4, side: THREE.DoubleSide }));
   for (const m of [inner, outer, boards, capStrip]) { m.castShadow = m !== boards; m.receiveShadow = true; scene.add(m); }
 
   const wallBoxes = (laneCentre, halfThick, halfHeight) => {
@@ -862,6 +869,34 @@ export function createWorld(scene, physics, R) {
     }
     g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     scene.add(g);
+  }
+
+  // ---------- Tyre walls behind the outer barrier in both bends ----------
+  // Stacks of three racing tyres in navy / lime / white; one instanced mesh
+  // per bend so each can be culled on its own.
+  {
+    const tyreGeo = new THREE.TorusGeometry(0.42, 0.17, seg(12, 8), seg(28, 16));
+    tyreGeo.rotateX(Math.PI / 2);
+    const tyreMat = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0 });
+    const cols = [new THREE.Color(0x0b1452), new THREE.Color(COLORS.lime), new THREE.Color(0xf4f6ff)];
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = V(1, 1, 1);
+    for (const [s0, s1] of [[TRACK.L + 6, TRACK.L + Math.PI * (TRACK.R + W / 2) - 6], [3 * TRACK.L + Math.PI * (TRACK.R + W / 2) + 6, 3 * TRACK.L + 2 * Math.PI * (TRACK.R + W / 2) - 6]]) {
+      const stacks = Math.floor((s1 - s0) / 7);
+      const mesh = new THREE.InstancedMesh(tyreGeo, tyreMat, stacks * 3);
+      let k = 0;
+      for (let i = 0; i < stacks; i++) {
+        const p = trackPoint(s0 + i * 7 + 3.5, W + 2.35);
+        for (let h = 0; h < 3; h++) {
+          q.setFromAxisAngle(up, rand() * Math.PI);
+          m4.compose(V(p.x + (rand() - 0.5) * 0.08, 0.17 + h * 0.33, p.z + (rand() - 0.5) * 0.08), q, one);
+          mesh.setMatrixAt(k, m4);
+          mesh.setColorAt(k++, cols[(i + h) % 3]);
+        }
+      }
+      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.computeBoundingSphere();
+      scene.add(mesh);
+    }
   }
 
   // ---------- Inflatable arches over the bends ----------
