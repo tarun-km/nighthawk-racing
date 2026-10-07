@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Hawk Racing</title>
+    <meta name="description" content="Hawk Racing by Night Hawk Energy: race three CPU rivals in the Grand Prix, chase a high score, or go head to head in a split-screen Blue vs Red duel. Free in your browser." />
+    <meta property="og:title" content="Hawk Racing · Night Hawk Energy" />
+    <meta property="og:description" content="Four racers. Three laps. One crown. A Night Hawk Energy racing game, free in your browser." />
+    <meta property="og:image" content="/brand/keyart.webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#02030f" />
+    <link rel="icon" href="/brand/logo-white.webp" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Chakra+Petch:wght@400;600;700&family=Unbounded:wght@700;900&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="ic-none" viewBox="0 0 48 48"><rect x="11" y="11" width="26" height="26" rx="6" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="4 4"/></symbol>
+      <symbol id="ic-turbo" viewBox="0 0 48 48"><path d="M27 4 9 27h12l-3 17 19-24H25z" fill="currentColor"/></symbol>
+      <symbol id="ic-hawk" viewBox="0 0 48 48"><path d="M24 30c-3-6-10-11-21-13 6 5 9 9 10 14 3-1 7 0 11 3 4-3 8-4 11-3 1-5 4-9 10-14-11 2-18 7-21 13z" fill="currentColor"/><circle cx="24" cy="34" r="3" fill="currentColor"/></symbol>
+      <symbol id="ic-mines" viewBox="0 0 48 48"><rect x="15" y="9" width="18" height="30" rx="4" fill="currentColor"/><rect x="17" y="6" width="14" height="4" rx="2" fill="currentColor"/><path d="M6 20l5 2M6 30l5-2M42 20l-5 2M42 30l-5-2" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+      <symbol id="ic-shield" viewBox="0 0 48 48"><path d="M24 4 7 10v12c0 11 7 18 17 22 10-4 17-11 17-22V10z" fill="currentColor"/><path d="M17 24l5 5 9-10" fill="none" stroke="#050a3a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    </svg>
+    <div id="scene"></div>
+
+    <!-- 1. Mosaic loader -->
+    <section id="intro" class="screen is-active">
+      <div class="keyart" id="keyart">
+        <img class="keyart-img" src="/brand/keyart.webp" alt="Night Hawk Classic and Ultra cans squaring up" />
+        <div class="keyart-glow"></div>
+        <div class="keyart-brand">
+          <img class="keyart-logo" src="/brand/logo-white.webp" alt="Night Hawk" />
+          <h1 class="keyart-title"><span>HAWK</span><span>RACING</span></h1>
+        </div>
+        <div class="tiles" id="tiles"></div>
+      </div>
+      <div class="intro-foot">
+        <span class="intro-label">Charging</span>
+        <span class="intro-pct" id="intro-pct">0</span>
+      </div>
+    </section>
+
+    <!-- 2. Welcome -->
+    <section id="welcome" class="screen">
+      <p class="welcome-top">Welcome</p>
+      <p class="welcome-name" id="welcome-name">PILOT-000</p>
+    </section>
+
+    <!-- 3. Iris reveal (masks the 3D scene) -->
+    <div id="iris"></div>
+
+    <!-- 4. Sound prompt -->
+    <section id="sound" class="screen">
+      <button class="sound-opt off" data-sound="off"><kbd>Esc</kbd><b>Off</b></button>
+      <h2 class="sound-q">SOUND<em>?</em></h2>
+      <button class="sound-opt on" data-sound="on"><kbd>&#8629;</kbd><b>On</b></button>
+    </section>
+
+    <!-- Garage / main menu -->
+    <section id="menu" class="screen">
+      <header class="topbar">
+        <img class="brand" src="/brand/logo-white.webp" alt="Night Hawk" />
+        <div class="topbar-mid"><span class="dot-live"></span>Night Hawk Stadium</div>
+        <div class="topbar-actions">
+          <button class="icon-btn" data-action="help" aria-label="Controls and rules">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg>
+          </button>
+          <button class="icon-btn" data-action="settings" aria-label="Settings">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          </button>
+          <button class="icon-btn" data-action="mute" aria-label="Toggle sound">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="menu-left">
+        <p class="eyebrow">Night Hawk Energy presents</p>
+        <h1 class="title"><span>HAWK</span><span class="outline">RACING</span></h1>
+
+        <div class="modes" role="radiogroup" aria-label="Game mode">
+          <button class="mode" data-mode="gp" role="radio">
+            <b>GP</b>
+            <span class="mode-name">Grand Prix</span>
+            <small>You vs 3 rivals · 3 laps</small>
+            <kbd>1</kbd>
+          </button>
+          <button class="mode" data-mode="solo" role="radio">
+            <b>SA</b>
+            <span class="mode-name">Score Attack</span>
+            <small>75 s · combos · gates</small>
+            <kbd>2</kbd>
+          </button>
+          <button class="mode" data-mode="duel" role="radio">
+            <b>2P</b>
+            <span class="mode-name">Duel</span>
+            <small>Blue vs Red · split screen</small>
+            <kbd>3</kbd>
+          </button>
+        </div>
+
+        <div class="gp-only diffs-wrap">
+          <div class="label">Rivals</div>
+          <div class="diffs" role="radiogroup" aria-label="CPU difficulty">
+            <button class="diff" data-diff="rookie" role="radio"><b>Rookie</b><small>Warm-up pace</small></button>
+            <button class="diff" data-diff="pro" role="radio"><b>Pro</b><small>A real race</small></button>
+            <button class="diff" data-diff="legend" role="radio"><b>Legend</b><small class="lock-note">Win on Pro to unlock</small><small class="open-note">No mercy</small></button>
+          </div>
+        </div>
+
+        <div class="one-only">
+          <div class="label">Choose your fuel</div>
+          <div class="fuels" id="fuels" role="radiogroup" aria-label="Fuel"></div>
+          <label class="field">
+            <span>Pilot name</span>
+            <input id="pilot-name" maxlength="14" placeholder="PILOT-001" autocomplete="off" spellcheck="false" />
+          </label>
+        </div>
+
+        <div class="duel-only versus">
+          <div class="vs-card blue">
+            <img src="/brand/can-classic.webp" alt="" />
+            <div class="vs-body">
+              <div class="vs-tag"><b>P1</b> Blue</div>
+              <div class="vs-car">Classic Cruiser</div>
+              <input id="p1-name" maxlength="14" placeholder="PILOT-001" autocomplete="off" spellcheck="false" aria-label="Player 1 name" />
+              <div class="vs-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>drive</span><kbd>L-Shift</kbd><span>nitro</span><kbd>Space</kbd><span>drift</span></div>
+            </div>
+          </div>
+          <div class="vs-badge">VS</div>
+          <div class="vs-card red">
+            <img src="/brand/can-ultra.webp" alt="" />
+            <div class="vs-body">
+              <div class="vs-tag"><b>P2</b> Red</div>
+              <div class="vs-car">Ultra Buggy</div>
+              <input id="p2-name" maxlength="14" placeholder="RIVAL-001" autocomplete="off" spellcheck="false" aria-label="Player 2 name" />
+              <div class="vs-keys"><kbd>&#8593;</kbd><kbd>&#8592;</kbd><kbd>&#8595;</kbd><kbd>&#8594;</kbd><span>drive</span><kbd>R-Shift</kbd><span>nitro</span><kbd>R-Ctrl</kbd><span>drift</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-row">
+          <button class="cta" data-action="play">
+            <span>Race</span>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+            <kbd>Enter</kbd>
+          </button>
+          <button class="ghost trailer-btn" data-action="trailer">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>
+            Trailer <kbd>T</kbd>
+          </button>
+          <p class="hint duel-only">Gamepads work too: one per player.</p>
+        </div>
+      </div>
+
+      <aside class="menu-right">
+        <div class="card gp-only">
+          <h3>Hawk Box power-ups</h3>
+          <ul class="powers">
+            <li><svg style="--ic:#8dc63f"><use href="#ic-turbo"/></svg><span><b>Turbo can</b>Instant burst of speed</span></li>
+            <li><svg style="--ic:#f4f6ff"><use href="#ic-hawk"/></svg><span><b>Hawk strike</b>Homes in on the car ahead</span></li>
+            <li><svg style="--ic:#ff3348"><use href="#ic-mines"/></svg><span><b>Can mines</b>Drop three behind you</span></li>
+            <li><svg style="--ic:#3d6bff"><use href="#ic-shield"/></svg><span><b>Wing shield</b>Shrugs off one hit</span></li>
+          </ul>
+          <p class="card-note"><kbd>E</kbd> fires · drift with <kbd>Space</kbd> for a mini-turbo · tuck in behind for slipstream</p>
+        </div>
+        <div class="card gp-only">
+          <h3>Career <span class="local">on this device</span></h3>
+          <div class="career">
+            <div><b id="car-wins">0</b><small>Wins</small></div>
+            <div><b id="car-podiums">0</b><small>Podiums</small></div>
+            <div><b id="car-races">0</b><small>Races</small></div>
+            <div><b id="car-best">—</b><small>Best lap</small></div>
+          </div>
+        </div>
+        <div class="card solo-only">
+          <h3>Controls</h3>
+          <ul class="controls">
+            <li><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Drive / steer (or arrows)</span></li>
+            <li><span class="keys"><kbd>Shift</kbd></span><span>Nitro boost</span></li>
+            <li><span class="keys"><kbd>Space</kbd></span><span>Handbrake drift</span></li>
+            <li><span class="keys"><kbd>R</kbd></span><span>Reset car</span></li>
+            <li><span class="keys"><kbd>Esc</kbd></span><span>Pause</span></li>
+          </ul>
+        </div>
+        <div class="card solo-only">
+          <h3>How to score</h3>
+          <ul class="legend">
+            <li><i class="dot can"></i>Cans: points + a little nitro</li>
+            <li><i class="dot nitro"></i>Nitro tanks &amp; pads: refill / free boost</li>
+            <li><i class="dot lime"></i>Bolts: raise the multiplier</li>
+            <li><i class="dot white"></i>Wings: Hawk Mode + 5 s</li>
+            <li><i class="dot gate"></i>Gates: + 4 s and big points</li>
+            <li><i class="dot dark"></i>Long drifts: Style and combo points</li>
+          </ul>
+        </div>
+        <div class="card solo-only">
+          <h3>Top pilots <span class="local">on this device</span></h3>
+          <ol class="board" id="board-menu"></ol>
+        </div>
+
+        <div class="card duel-only">
+          <h3>Head to head</h3>
+          <div class="tally">
+            <div class="t-blue"><b id="tally-blue">0</b><small>Blue wins</small></div>
+            <span>—</span>
+            <div class="t-red"><b id="tally-red">0</b><small>Red wins</small></div>
+          </div>
+        </div>
+        <div class="card duel-only">
+          <h3>Duel rules</h3>
+          <ul class="legend">
+            <li><i class="dot gate"></i>Three laps of the oval. First across the line wins.</li>
+            <li><i class="dot nitro"></i>Nitro tanks and pads refill and fire your boost.</li>
+            <li><i class="dot lime"></i>Hawk Boxes: power-ups. P1 <kbd>E</kbd> · P2 <kbd>Enter</kbd></li>
+            <li><i class="dot white"></i>Drift for a mini-turbo, tuck in behind for slipstream.</li>
+          </ul>
+        </div>
+        <div class="card duel-only">
+          <h3>Reset</h3>
+          <ul class="controls">
+            <li><span class="keys"><kbd>R</kbd></span><span>Reset Blue</span></li>
+            <li><span class="keys"><kbd>Backspace</kbd></span><span>Reset Red</span></li>
+            <li><span class="keys"><kbd>Esc</kbd></span><span>Pause</span></li>
+          </ul>
+        </div>
+      </aside>
+    </section>
+
+    <!-- In-race HUD -->
+    <section id="hud" class="screen">
+      <div class="hud-clock"><span id="hud-time">75.0</span><small class="solo-only">sec left</small><small class="race-only">race</small></div>
+      <div class="split-line duel-only"></div>
+      <div id="panes"></div>
+      <ol class="standings gp-only" id="standings" aria-label="Race order"></ol>
+      <canvas class="minimap" id="minimap" width="360" height="170" aria-label="Track map"></canvas>
+      <div class="lights" id="lights" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="big-text" id="big-text"></div>
+
+      <div class="hud-buttons">
+        <button class="icon-btn" data-action="mute" aria-label="Toggle sound">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+        </button>
+        <button class="icon-btn" data-action="pause" aria-label="Pause">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        </button>
+      </div>
+
+      <!-- Touch controls (single player) -->
+      <div class="touch" id="touch">
+        <div class="stick" id="stick"><span id="stick-knob"></span></div>
+        <div class="touch-btns">
+          <button id="btn-item" class="race-only">ITEM</button>
+          <button id="btn-drift">DRIFT</button>
+          <button id="btn-boost">NITRO</button>
+        </div>
+      </div>
+    </section>
+    <div id="popups"></div>
+
+    <!-- Per-player HUD pane -->
+    <template id="pane-tpl">
+      <div class="pane">
+        <div class="p-tag"><b>P1</b><span>BLUE</span><em class="p-name">PILOT</em></div>
+        <div class="p-pos race-only"><b>1</b><sup>ST</sup></div>
+        <div class="p-lap race-only"><small>Lap</small><b>1/3</b><span class="lap-time">0:00.00</span><span class="best">Best —</span></div>
+        <div class="p-item race-only is-empty"><svg><use href="#ic-none"/></svg><span class="p-item-name">Hawk Box</span><kbd>E</kbd></div>
+        <div class="p-draft">SLIPSTREAM</div>
+        <div class="p-score solo-only"><small>Points</small><b>0</b></div>
+        <div class="p-left solo-only">
+          <div class="p-mult"><small>mult</small><b>x1.0</b></div>
+          <div class="p-combo"></div>
+          <div class="p-style"><small>Style</small><div><i></i></div></div>
+        </div>
+        <div class="p-drift">DRIFT</div>
+        <div class="p-hawk">HAWK MODE</div>
+        <div class="p-msg"></div>
+        <div class="p-wrong">WRONG WAY</div>
+        <div class="gate-arrow solo-only">
+          <svg viewBox="0 0 40 40" width="40" height="40"><path d="M20 3 L34 32 L20 25 L6 32 Z" /></svg>
+          <span class="gate-dist">0 m</span>
+        </div>
+        <div class="p-gauge">
+          <svg viewBox="0 0 160 160" aria-hidden="true">
+            <circle class="g-track" cx="80" cy="80" r="62" />
+            <circle class="g-speed" cx="80" cy="80" r="62" />
+            <circle class="g-ntrack" cx="80" cy="80" r="50" />
+            <circle class="g-nitro" cx="80" cy="80" r="50" />
+            <g class="g-ticks"></g>
+            <line class="g-needle" x1="80" y1="80" x2="80" y2="26" />
+            <circle class="g-hub" cx="80" cy="80" r="6" />
+          </svg>
+          <div class="g-read"><b class="g-kmh">0</b><small>km/h</small><span class="g-label">Nitro</span></div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Airdrop cinematic -->
+    <section id="drop" class="screen">
+      <div class="drop-title"><small>Now dropping</small><b>HAWK RACING</b></div>
+      <div class="drop-bars"><i></i><i></i></div>
+      <button class="drop-skip" data-action="skip"><span>Skip</span><kbd>Enter</kbd></button>
+    </section>
+
+    <!-- Pause -->
+    <section id="pause" class="screen modal">
+      <div class="panel">
+        <p class="eyebrow">Pit stop</p>
+        <h2>Paused</h2>
+        <button class="cta" data-action="resume"><span>Resume</span><kbd>Esc</kbd></button>
+        <div class="row">
+          <button class="ghost" data-action="settings">Settings</button>
+          <button class="ghost" data-action="garage">Back to garage</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Solo results -->
+    <section id="results" class="screen modal">
+      <div class="panel wide">
+        <div class="res-head">
+          <div>
+            <p class="eyebrow">Run complete</p>
+            <h2 id="res-rank">Night Owl</h2>
+          </div>
+          <img class="res-can" id="res-can" src="/brand/can-classic.webp" alt="" />
+        </div>
+        <div class="res-score"><span id="res-score">0</span><small>points</small></div>
+        <div class="stats" id="res-stats"></div>
+        <h3>Top pilots <span class="local">on this device</span></h3>
+        <ol class="board" id="board-results"></ol>
+        <div class="row">
+          <button class="cta" data-action="play"><span>Race again</span><kbd>Enter</kbd></button>
+          <button class="ghost" data-action="garage">Garage</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Grand Prix results -->
+    <section id="gp-results" class="screen modal" data-medal="none">
+      <div class="panel wide gp-panel">
+        <div class="gp-head">
+          <div class="gp-place"><b id="gp-place">1</b><sup id="gp-sup">ST</sup></div>
+          <div>
+            <p class="eyebrow">Chequered flag</p>
+            <h2 id="gp-title">Victory</h2>
+            <p class="gp-sub" id="gp-sub">Pro Grand Prix</p>
+          </div>
+          <div class="gp-medal" aria-hidden="true"><svg viewBox="0 0 48 48"><use href="#ic-hawk"/></svg></div>
+        </div>
+        <ol class="gp-table" id="gp-table"></ol>
+        <div class="stats" id="gp-stats"></div>
+        <p class="gp-unlock" id="gp-unlock" hidden>Legend difficulty unlocked</p>
+        <div class="row">
+          <button class="cta" data-action="play"><span>Race again</span><kbd>Enter</kbd></button>
+          <button class="ghost" data-action="garage">Garage</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trailer -->
+    <section id="trailer" class="screen">
+      <canvas id="titles" aria-hidden="true"></canvas>
+      <button class="drop-skip" data-action="skip"><span>Skip</span><kbd>Esc</kbd></button>
+    </section>
+
+    <!-- Duel results -->
+    <section id="duel-results" class="screen modal">
+      <div class="panel wide duel-panel">
+        <div class="dr-head">
+          <img id="dr-can" src="/brand/can-classic.webp" alt="" />
+          <div>
+            <p class="eyebrow">Chequered flag</p>
+            <h2 id="dr-winner">BLUE WINS</h2>
+            <p class="dr-name" id="dr-name">PILOT</p>
+          </div>
+        </div>
+        <div class="dr-table" id="dr-table"></div>
+        <div class="row">
+          <button class="cta" data-action="play"><span>Rematch</span><kbd>Enter</kbd></button>
+          <button class="ghost" data-action="garage">Garage</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings" class="screen modal dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="panel">
+        <header class="dlg-head"><h2 id="settings-title">Settings</h2><button class="icon-btn" data-action="close-settings" aria-label="Close settings">&#10005;</button></header>
+        <fieldset>
+          <legend>Graphics quality</legend>
+          <div class="seg" role="radiogroup" aria-label="Graphics quality">
+            <label><input type="radio" name="quality" value="auto" /><span>Auto</span></label>
+            <label><input type="radio" name="quality" value="low" /><span>Low</span></label>
+            <label><input type="radio" name="quality" value="medium" /><span>Medium</span></label>
+            <label><input type="radio" name="quality" value="high" /><span>High</span></label>
+          </div>
+          <p class="note">Auto watches frame times and adjusts render scale, shadows, ambient occlusion and crowd size.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Comfort</legend>
+          <label class="toggle"><input type="checkbox" id="set-shake" /><span>Camera shake</span></label>
+          <label class="toggle"><input type="checkbox" id="set-motion" /><span>Reduced motion</span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Audio</legend>
+          <label class="slider"><span>Music</span><input type="range" id="set-music" min="0" max="100" /></label>
+          <label class="slider"><span>Effects</span><input type="range" id="set-sfx" min="0" max="100" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Advanced</legend>
+          <label class="toggle"><input type="checkbox" id="set-stats" /><span>Performance overlay <kbd>F3</kbd></span></label>
+        </fieldset>
+      </div>
+    </section>
+
+    <!-- Help -->
+    <section id="help" class="screen modal dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="panel wide">
+        <header class="dlg-head"><h2 id="help-title">How to play</h2><button class="icon-btn" data-action="close-help" aria-label="Close help">&#10005;</button></header>
+        <div class="help-cols">
+          <div>
+            <h3>Grand Prix · You vs 3 rivals</h3>
+            <p>Three laps against the CPU. Start from the back and fight through. Drive through Hawk Boxes for power-ups and fire them with <kbd>E</kbd>. Hold a drift with <kbd>Space</kbd> and let go for a mini-turbo. Sit close behind a rival to catch the slipstream. Win on Pro to unlock Legend.</p>
+          </div>
+          <div>
+            <h3>Score attack · 75 s</h3>
+            <p>75 seconds on the stadium course. Grab cans for points, bolts for the multiplier, wings for Hawk Mode, and thread the gates for extra time.</p>
+            <ul class="controls">
+              <li><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Drive (arrows work too)</span></li>
+              <li><span class="keys"><kbd>Shift</kbd></span><span>Nitro</span></li>
+              <li><span class="keys"><kbd>Space</kbd></span><span>Drift</span></li>
+              <li><span class="keys"><kbd>R</kbd></span><span>Reset car</span></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Duel · Blue vs Red</h3>
+            <p>Three laps, split screen, power-ups on. Checkpoints only count on the road. Drifting charges nitro.</p>
+            <ul class="controls">
+              <li><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>P1 Blue · <kbd>L-Shift</kbd> nitro · <kbd>Space</kbd> drift · <kbd>E</kbd> item · <kbd>R</kbd> reset</span></li>
+              <li><span class="keys"><kbd>&#8593;</kbd><kbd>&#8592;</kbd><kbd>&#8595;</kbd><kbd>&#8594;</kbd></span><span>P2 Red · <kbd>R-Shift</kbd> nitro · <kbd>R-Ctrl</kbd> drift · <kbd>Enter</kbd> item · <kbd>Backspace</kbd> reset</span></li>
+              <li><span class="keys"><kbd>Pad</kbd></span><span>Stick steer · RT/LT throttle · A nitro · B drift · Y/RB item</span></li>
+            </ul>
+          </div>
+        </div>
+        <p class="note">Esc pauses · T plays the trailer from the garage · Scores and career are saved on this device only.</p>
+      </div>
+    </section>
+
+    <!-- Startup failure -->
+    <section id="boot-error" class="screen modal" role="alertdialog" aria-labelledby="boot-title">
+      <div class="panel">
+        <h2 id="boot-title">Couldn't start</h2>
+        <p class="note">Stopped while: <b id="boot-stage">Starting</b></p>
+        <p id="boot-msg" class="boot-msg"></p>
+        <button class="cta" id="boot-retry"><span>Retry</span></button>
+      </div>
+    </section>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="diag" aria-hidden="true"><b>Performance <span id="diag-q"></span></b><pre></pre></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

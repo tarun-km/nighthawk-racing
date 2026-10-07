@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vercel/
+trailer/frames/
+*.log
+.DS_Store
+trailer/review/
+trailer/*.mp4
+.claude/
